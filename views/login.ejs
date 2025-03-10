@@ -1,0 +1,15 @@
+
+
+<h1>login</h1>
+<form action="" method="POST">
+    <label>Email:</label>
+    <input type="email" name="email" required><br><br>
+
+    <label>Password:</label>
+    <input type="password" name="password" required><br><br>
+    <button type="submit">login</button>
+</form>
+
+<% if (typeof message !== 'undefined' && message) { %>
+    <p style="color: rgb(255, 0, 0);"><%= message %></p>
+<% } %>
