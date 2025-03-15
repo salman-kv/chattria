@@ -12021,3 +12021,13 @@ a[data-toggle="collapse"] {
 .chat-section {
   display: none;
 }
+
+.online-status {
+  color: green;
+  font-size: 10;
+}
+
+.ofline-status {
+  color: red;
+  font-size: 10;
+}

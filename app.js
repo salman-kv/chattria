@@ -23,16 +23,19 @@ const io = require('socket.io')(http);
 var usp = io.of('/user-namespace');
 
 usp.on('connection', async (socket) => {
-
-    console.log('connected socket io');
     var token = socket.handshake.auth.token;
-
     await User.findByIdAndUpdate({_id: token },{$set:{ is_online : true}});
+
+    // emit brodcast to all user to update the user connected
+
+    socket.broadcast.emit('getUserOnline',{user_id : token});   
     
 
     socket.on('disconnect',async function(){
         console.log('disconnected socket io');
         await User.findByIdAndUpdate({_id: token },{$set:{ is_online : false}});
+
+        socket.broadcast.emit('getUserOfline',{user_id : token});   
     })
 
 })
