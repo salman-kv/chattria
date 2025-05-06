@@ -16,10 +16,16 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/user', userRouter);
 
-const http = require('http').Server(app);
-
 const User = require('../chattria/models/user_model');
-const io = require('socket.io')(http);
+
+const http = require('http');
+const { Server } = require('socket.io');
+const server = http.createServer(app);
+const io = new Server(server,{
+    cors : {
+        origin : '*'
+    }
+})
 var usp = io.of('/user-namespace');
 
 usp.on('connection', async (socket) => {
@@ -40,7 +46,7 @@ usp.on('connection', async (socket) => {
 
 })
 
-http.listen(3000, function () {
+app.listen(3000, function () {
     console.log('server is running');
 
 });
