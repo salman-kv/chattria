@@ -4,6 +4,7 @@ const session = require('express-session');
 const nodeMail = require('nodemailer');
 const Mail = require('nodemailer/lib/mailer');
 const { use } = require('../routes/user_routes');
+const jwt = require('jsonwebtoken');
 
 const transporter = nodeMail.createTransport({
     service: 'Gmail',
@@ -34,10 +35,6 @@ const sendMail = async (req, res) => {
     }
 }
 
-const registerLoad = async (req, res) => {
-    res.render('register');
-}
-
 const register = async (req, res) => {
 
     const { email, password } = req.body;
@@ -62,18 +59,6 @@ const register = async (req, res) => {
 
         res.status(200)
             .json({ message: "User created successfully" });
-        // console.log('entering');
-        // const passwordhash = await bcrypt.hash(req.body.password, 10);
-        // const user = new User({
-        //     name: req.body.name,
-        //     email: req.body.email,
-        //     image: 'images/' + req.file.filename,
-        //     password: passwordhash
-        // });
-
-        // await user.save();
-
-        // res.render('register', { message: 'success' })
 
     } catch (error) {
         console.log(error);
@@ -82,98 +67,88 @@ const register = async (req, res) => {
     }
 }
 
-const loginLoad = (req, res) => {
+const genarateAccessTokenAndRefreshToken = async function (id) {
     try {
-        res.render('login');
-    } catch (error) {
-        console.log(error.message);
-    }
-}
+        const user = await User.findById(id);
+        const refreshToken = await user.genarateRefreshToken();
+        const accessToken = await user.genarateAccessToken();
 
-const genarateAccessTokenAndRefreshToken = async function(id){
-    try {
-        
+        user.refreshToken = refreshToken;
+
+        await user.save();
+
+        return { refreshToken, accessToken };
     } catch (error) {
         console.log('error');
-        
+
     }
 }
 
 const login = async (req, res) => {
 
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ message: " Email and password required" });
-    }
-
-    const user = User.findOne({ email });
-
-    if (!user) {
-        res.status(400).json({ message: "User not found" });
-    }
-
-    const isPasswordvalid = await user.isPasswordCurrect(password);
-
-    if (!isPasswordvalid) {
-        return res.status(400).json({ message: 'Email or password incorrect' });
-    }
-
-
-
-    // try {
-    //     const email = req.body.email;
-    //     const password = req.body.password;
-
-    //     const userData = await User.findOne({ email: email });
-
-    //     if (userData) {
-    //         const passwordMatch = await bcrypt.compare(password, userData.password);
-    //         if (passwordMatch) {
-    //             console.log('true');
-    //             req.session.user = userData;
-    //             res.redirect('/user/dashboard');
-    //         } else {
-    //             console.log('false');
-    //             res.render('login', { message: 'Incorrect email or password' });
-    //         }
-
-
-    //     } else {
-    //         res.render('login', { message: 'Incorrect email or password' });
-    //     }
-
-    // } catch (error) {
-    //     console.log(error.message);
-    // }
-}
-
-const logout = (req, res) => {
     try {
-        req.session.destroy();
-        res.redirect('/user/login');
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ message: " Email and password required" });
+        }
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            res.status(400).json({ message: "User not found" });
+        }
+
+        const isPasswordvalid = await user.isPasswordCorrect(password);
+
+        if (!isPasswordvalid) {
+            return res.status(400).json({ message: 'Email or password incorrect' });
+        }
+        const { refreshToken, accessToken } = await genarateAccessTokenAndRefreshToken(user._id);
+
+        const loggedUser = await User.findById(user._id).select("-password -refreshToken");
+
+        res.status(200).json({ user: loggedUser, accessToken: accessToken, refreshToken: refreshToken });
 
     } catch (error) {
-        console.log(error.message);
+        console.log(error);
+        res.status(400).json({ message: 'Somthing went wrong' });
     }
 }
 
-const dashboardLoad = async (req, res) => {
+const refreshAccessToken = async function (req, res) {
+
+    const incomingRefreshToken = req.body.refreshToken;
+    if (!incomingRefreshToken) {
+        return res.status(400).json({ message: " refresh token missing" });
+    }
+
     try {
-        var users = await User.find({ _id: { $nin: [req.session.user._id] } });
-        console.log(users);
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
 
-        res.render('dashboard', { user: req.session.user, users: users });
+        const user = await User.findById(decodedToken._id);
+
+        if (!user) {
+            return res.status(400).json({ message: "no user found" });
+        }
+
+        if (user.refreshToken !== incomingRefreshToken) {
+            return res.status(400).json({ message: "invalid refresh token" });
+        }
+
+        const { refreshToken, accessToken } = await genarateAccessTokenAndRefreshToken(user._id);
+
+        res.status(200).json({ accessToken: accessToken, refreshToken: refreshToken, message: "AccesToken refreshed" });
+
+
     } catch (error) {
-        console.log(error.message);
+        res.status(500).json({ message: error });
     }
 }
+
 
 module.exports = {
-    registerLoad,
     register,
     login,
-    loginLoad,
-    logout,
-    dashboardLoad,
-    sendMail
+    sendMail,
+    refreshAccessToken
 }
