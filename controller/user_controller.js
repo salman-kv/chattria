@@ -1,37 +1,68 @@
-const bcrypt = require('bcrypt');
 const User = require('../models/user_model');
-const session = require('express-session');
 const nodeMail = require('nodemailer');
-const Mail = require('nodemailer/lib/mailer');
-const { use } = require('../routes/user_routes');
 const jwt = require('jsonwebtoken');
+const Otp = require('../models/otp_model');
+
+require('dotenv').config();
 
 const transporter = nodeMail.createTransport({
-    service: 'Gmail',
     secure: true,
     host: 'smtp.gmail.com',
     port: 465,
     auth: {
-        user: 'kvsalu16@gmail.com',
-        pass: 'pjxl czhh hbnp rqkg'
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 })
 
-const sendMail = async (req, res) => {
+const sendMailOtp = async (req, res) => {
     try {
-        const randomNumber = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000).toString();
         const { email } = req.body;
-        console.log(randomNumber);
+
+        if (!email) return res.status(400).json({ message: 'Email is required' });
+
+        const randomNumber = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000).toString();
+        const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+        await Otp.deleteMany({ email: email });
+
+        await Otp.create({ email: email, otp: randomNumber, otpExpires: otpExpires });
+
         transporter.sendMail({
+            from: process.env.EMAIL_USER,
             to: email,
-            subject: "subject",
+            subject: "Chattria OTP verification",
             html: randomNumber,
-            text: 'text'
         });
-        res.status(200);
-        res.send();
+        res.status(200).json({ 'message': 'OTP shared successfully to' + email });
     } catch (error) {
-        console.log('errrrrrrrrror');
+        res.send({ 'message': error })
+    }
+}
+
+const verifyMailOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) return res.status(400).json({ message: 'Invalid Otp' });
+
+        const otpRecord = await Otp.findOne({ email: email });
+
+        if (!otpRecord) return res.status(400).json({ message: 'Email not registerd Plese check email and otp' });
+
+        if (otpRecord.otpExpires < Date.now()) {
+            await Otp.deleteMany({ email: email });
+            return res.status(400).json({ message: 'Otp expired' });
+        }
+        if (otpRecord.otp === otp) {
+            await Otp.deleteMany({ email: email });
+            res.status(200).json({ message: 'Otp verification successfull' })
+        } else {
+            return res.status(400).json({ message: 'invalid Otp' });
+        }
+
+
+    } catch (error) {
+        res.send({ message: 'Otp verification error' })
     }
 }
 
@@ -149,6 +180,7 @@ const refreshAccessToken = async function (req, res) {
 module.exports = {
     register,
     login,
-    sendMail,
-    refreshAccessToken
+    sendMailOtp,
+    refreshAccessToken,
+    verifyMailOtp
 }

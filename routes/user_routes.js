@@ -5,6 +5,8 @@ const userController = require('../controller/user_controller');
 
 
 router.route('/register').post(userController.register);
+router.route('/send-mail-otp').post(userController.sendMailOtp);
+router.route('/verify-mail-otp').post(userController.verifyMailOtp);
 router.route('/login').post(userController.login);
 router.route("/refresh-token").post(userController.refreshAccessToken);
 
